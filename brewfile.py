@@ -1,9 +1,9 @@
 import os
 import re
 import subprocess
-
 import dotbot
 
+home = os.path.expanduser("~")
 
 INCLUDE_OPTIONS = frozenset(('tap', 'brew', 'cask', 'mas'))
 BREWFILE_LINE = re.compile(
@@ -16,7 +16,6 @@ BREWFILE_LINE = re.compile(
     """,
     re.MULTILINE | re.VERBOSE,
 )
-
 
 class Brew(dotbot.Plugin):
     _supported_directives = frozenset((
@@ -41,11 +40,18 @@ class Brew(dotbot.Plugin):
         data = self._maybe_convert_to_dict(data)
 
         try:
-            if not self._does_brewfile_exist(data):
+            opt_global = data.get("global", False)
+            opt_file = data.get("file", False)
+
+            if not opt_file and not opt_global:
+                raise ValueError("No bundle file was given. Either set \n- brewfile: \"path\" \n\n- brewfile:\n    file: \"path\" \n\n- brewfile:\n    global: true")
+
+            if self._does_brewfile_exist(data):
+                self._handle_install(data)
+                self._handle_tap(data)
+            else:
                 raise ValueError('Bundle file does not exist.')
 
-            self._handle_tap(data)
-            self._handle_install(data)
         except ValueError as e:
             self._log.error(e)
             return False
@@ -66,9 +72,17 @@ class Brew(dotbot.Plugin):
         return data
 
     def _brewfile_path(self, data):
-        return os.path.join(
-            self.cwd, data.get('file', self._default_filename)
-        )
+        path = ""
+        if bool(data.get("global", False)):
+            print("JRY - we have the global option")
+            path = os.path.abspath(os.path.join(home, ".Brewfile"))
+        else:
+            print("JRY - we have the file option")
+            path = os.path.join(
+                self.cwd, data.get('file', self._default_filename)
+            )
+        print("JRY ===== path = ", path)
+        return path
 
     def _does_brewfile_exist(self, data):
         path = self._brewfile_path(data)
